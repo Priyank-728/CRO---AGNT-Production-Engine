@@ -203,14 +203,15 @@ Dark mode, premium, high contrast.
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-1.5-pro",
+    model: "gemini-3-pro-preview",
     contents: userPrompt,
     config: {
       systemInstruction,
       responseMimeType: "application/json",
-      temperature: 0.2,
-      topP: 0.8,
-      maxOutputTokens: 4096
+      responseSchema: blueprintSchema,
+      temperature: 0.0, // Zero temperature for maximum determinism
+      topP: 0.7, 
+      maxOutputTokens: 4096 
     }
   });
 
@@ -247,14 +248,16 @@ FEEDBACK:
 ${feedback.comment}
 `;
 
+
   const response = await ai.models.generateContent({
-    model: "gemini-1.5-flash",
+    model: "gemini-3-flash-preview",
     contents: userPrompt,
     config: {
       systemInstruction,
       responseMimeType: "application/json",
-      temperature: 0.2,
-      topP: 0.8,
+      responseSchema: sectionSchema,
+      temperature: 0.0,
+      topP: 0.7,
       maxOutputTokens: 2048
     }
   });
