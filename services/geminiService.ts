@@ -6,27 +6,34 @@ import {
   Feedback
 } from "../types";
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY
-});
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-if (!import.meta.env.VITE_GEMINI_API_KEY) {
+if (!apiKey) {
   throw new Error("Missing VITE_GEMINI_API_KEY");
 }
+
+const ai = new GoogleGenAI({ apiKey });
+
 /* ============================
-   SCHEMA DEFINITIONS
+   SCHEMA DEFINITIONS (LOCAL)
    ============================ */
+/* NOTE:
+   Schemas are intentionally NOT enforced at generation time.
+   They exist for:
+   - developer clarity
+   - downstream validation
+   - regeneration consistency
+*/
 
 const contentSchemaProperties = {
-  headline: { type: Type.STRING, description: "Concise headline" },
-  description: { type: Type.STRING, description: "1-2 sentences explaining value" },
+  headline: { type: Type.STRING },
+  description: { type: Type.STRING },
   bullets: {
     type: Type.ARRAY,
     items: { type: Type.STRING }
   },
-  cta: { type: Type.STRING, description: "Short Call to Action" },
-  // Simplified description to prevent model from "checking" itself in the output
-  ribbon: { type: Type.STRING, description: "Short badge text. Example: 'Best Seller'" },
+  cta: { type: Type.STRING },
+  ribbon: { type: Type.STRING },
   image: {
     type: Type.OBJECT,
     properties: {
@@ -37,7 +44,6 @@ const contentSchemaProperties = {
   }
 };
 
-// Blueprint schema (FULL PAGE)
 const blueprintSchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -81,7 +87,6 @@ const blueprintSchema: Schema = {
           content: {
             type: Type.OBJECT,
             properties: contentSchemaProperties,
-            // 🔒 HARD REQUIREMENT
             required: ["headline", "description"]
           }
         },
@@ -92,7 +97,6 @@ const blueprintSchema: Schema = {
   required: ["primaryIntent", "designHints", "sections"]
 };
 
-// Single section schema (REGENERATION)
 const sectionSchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -111,7 +115,6 @@ const sectionSchema: Schema = {
     content: {
       type: Type.OBJECT,
       properties: contentSchemaProperties,
-      // 🔒 HARD REQUIREMENT
       required: ["headline", "description"]
     }
   },
@@ -168,44 +171,46 @@ export const generateLandingPage = async (
 ROLE: Senior CRO & Landing Page Architect.
 
 OBJECTIVE:
-Generate a high-converting landing page structure in strict JSON format.
+Generate a high-converting landing page in strict JSON.
 
 RULES:
-1. Output RAW JSON ONLY. No markdown blocks, no commentary.
-2. Sections Order: Hero -> SocialProof -> ValueProps -> Offer -> Guarantee -> Footer.
-3. Copy: Persuasive, direct, and benefit-oriented.
-4. Constraints:
-   - Headlines: Concise (under 12 words).
-   - Descriptions: 1-2 sentences.
-   - Ribbon: Short badge text only (e.g. "Best Seller"). DO NOT include validation text.
-   - Images: Visual descriptions required for key sections.
-
-NEGATIVE CONSTRAINTS:
-- Do NOT generate internal monologue or self-correction text.
-- Do NOT repeat phrases.
-- Do NOT make up "subheadline" fields.
+- Output RAW JSON only.
+- Section order: Hero → SocialProof → ValueProps → Offer → Guarantee → Footer.
+- No subheadlines.
+- Headlines under 12 words.
+- Descriptions 1–2 sentences.
+- No repetition.
+- No internal monologue.
 `;
 
   const userPrompt = `
 Generate landing page blueprint.
-Context:
-- Product: ${input.productDetails}
-- Ad Copy: ${input.adCopy}
-- Audience: ${input.audienceAttributes}
-- Goal: ${input.campaignObjective}
-- Design: Dark Mode
+
+Product:
+${input.productDetails}
+
+Ad Copy:
+${input.adCopy}
+
+Audience:
+${input.audienceAttributes}
+
+Goal:
+${input.campaignObjective}
+
+Design:
+Dark mode, premium, high contrast.
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
+    model: "gemini-1.5-pro",
     contents: userPrompt,
     config: {
       systemInstruction,
       responseMimeType: "application/json",
-      responseSchema: blueprintSchema,
-      temperature: 0.0, // Zero temperature for maximum determinism
-      topP: 0.7, 
-      maxOutputTokens: 4096 
+      temperature: 0.2,
+      topP: 0.8,
+      maxOutputTokens: 4096
     }
   });
 
@@ -224,35 +229,32 @@ export const regenerateSection = async (
   const systemInstruction = `
 ROLE: Senior CRO Copywriter.
 
-TASK: Rewrite the provided section based on feedback.
+TASK:
+Rewrite the section based on feedback.
 
 RULES:
-- Return valid JSON matching the section schema.
-- Maintain existing fields (description, image, etc).
-- Apply the feedback strictly.
-- No conversational text.
+- Output JSON only.
+- Preserve structure.
+- Improve clarity and conversion.
+- No repetition.
 `;
 
   const userPrompt = `
-SECTION TO EDIT:
+CURRENT SECTION:
 ${JSON.stringify(currentSection, null, 2)}
 
 FEEDBACK:
 ${feedback.comment}
-
-OUTPUT:
-Updated JSON object for this section.
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     contents: userPrompt,
     config: {
       systemInstruction,
       responseMimeType: "application/json",
-      responseSchema: sectionSchema,
-      temperature: 0.0,
-      topP: 0.7,
+      temperature: 0.2,
+      topP: 0.8,
       maxOutputTokens: 2048
     }
   });
